@@ -23,7 +23,17 @@
     padding-block:18px; padding-left:16px; padding-right:16px;
     background-image:radial-gradient(120% 70% at 50% 0%, #16204A 0%, #070B17 62%);
   }
-  .wrap{width:100%; max-width:520px; display:flex; flex-direction:column; gap:12px}
+  .wrap{width:100%; max-width:520px; display:flex; flex-direction:column; gap:14px}
+
+  /* Everything needed to play fits one screenful; the score table sits below
+     it, reached by a deliberate scroll. */
+  .game-shell{
+    height:100%; min-height:380px;
+    display:flex; flex-direction:column; gap:9px;
+  }
+  /* The board takes whatever height is left over, and sizes itself square to
+     fit that box — set in px by layout() so it never overflows either axis. */
+  .board-wrap{flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center}
 
   .masthead{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap}
   .masthead h1{margin:0; font-size:16px; letter-spacing:.5px; color:var(--frog); text-shadow:0 2px 0 #1C6B22}
@@ -51,7 +61,7 @@
   }
 
   .stage{position:relative; border:2px solid var(--edge); border-radius:4px; overflow:hidden; background:#0B1020}
-  canvas{display:block; width:100%; max-width:100%; aspect-ratio:1/1; touch-action:none}
+  #game{display:block; width:100%; height:100%; touch-action:none}
 
   .overlay{
     position:absolute; inset:0; display:grid; place-items:center;
@@ -108,12 +118,61 @@
   .score-list .sc{color:var(--ink); font-variant-numeric:tabular-nums}
   .score-list .lv{color:var(--dim); font-size:7.5px; text-align:right}
   .empty{margin:0; font-size:8px; color:var(--dim); line-height:2}
+  /* Narrow screens: keep the HUD on one row. Letting it wrap pushes the mute
+     button onto a line of its own and costs the board ~50px of height. */
+  @media (max-width:430px){
+    .hud{gap:6px; padding:7px 8px}
+    .stat{min-width:0}
+    .stat .v{font-size:10px}
+    .stat .k{font-size:6px; letter-spacing:.5px}
+    .icon{padding:6px 7px; font-size:11px}
+  }
+
+  /* Short screens: drop the decoration before the game gets squeezed. */
+  @media (max-height:720px){
+    body{padding-block:10px}
+    .masthead .sub{display:none}
+    .masthead h1{font-size:13px}
+    .hint{display:none}
+    .stat .k{font-size:6.5px}
+    .hud{padding:7px 9px; gap:8px}
+    .game-shell{gap:7px}
+  }
+  @media (max-height:560px){
+    .masthead{display:none}
+  }
+
+  /* Landscape on a phone: the D-pad moves beside the board instead of under
+     it, otherwise the leftover height leaves the board postage-stamp sized. */
+  @media (orientation:landscape) and (max-height:600px){
+    body{padding-block:6px}
+    .wrap{max-width:760px}
+    /* D-pad down the right, everything else stacked on the left. The power
+       strip keeps a hard width cap: stretched across a wide viewport its
+       520/80 ratio alone would make it 120px tall and crush the board. */
+    .game-shell{
+      display:grid; gap:6px;
+      grid-template-columns:1fr auto;
+      grid-template-rows:auto auto 1fr;
+      grid-template-areas:"hud pad" "power pad" "board pad";
+    }
+    .masthead, .hint{display:none}
+    .hud{grid-area:hud; padding:4px 8px; gap:7px}
+    .stat{min-width:44px; gap:1px}
+    .stat .v{font-size:9px}
+    .power{grid-area:power; max-width:340px}
+    .board-wrap{grid-area:board; min-width:0}
+    .pad{grid-area:pad; align-self:center; gap:5px}
+    .pad button{width:50px; height:36px; font-size:11px}
+  }
+
   [hidden]{display:none!important}
   @media (prefers-reduced-motion: reduce){ .btn:active{transform:none} }
 </style>
 </head>
 <body>
 <div class="wrap">
+ <div class="game-shell">
   <div class="masthead">
     <h1>Hop Hazard</h1>
     <p class="sub">5 lanes &middot; 5 currents &middot; 5 bays</p>
@@ -131,7 +190,8 @@
   <canvas class="power" id="power"
           aria-label="Power timer: a hand reaches for the plug as your time runs out"></canvas>
 
-  <div class="stage">
+  <div class="board-wrap">
+   <div class="stage">
     <canvas id="game" aria-label="Frogger game board"></canvas>
     <div class="overlay" id="overlay">
       <div class="panel">
@@ -148,6 +208,7 @@
         <button class="btn" id="ovBtn">Start</button>
       </div>
     </div>
+   </div>
   </div>
 
   <div class="pad">
@@ -160,6 +221,7 @@
   </div>
 
   <p class="hint">Arrow keys or WASD &middot; swipe the board &middot; P to pause</p>
+ </div>
 
   <section class="scores" aria-labelledby="scoresTitle">
     <div class="scores-head">
@@ -185,6 +247,28 @@
   var dpr = Math.min(window.devicePixelRatio || 1, 2);
   cvs.width = W * dpr; cvs.height = H * dpr;
   ctx.scale(dpr, dpr);
+
+  /* ---------- fitting the board to the screen ----------
+     The canvas keeps its 520x520 internal resolution and is scaled by CSS, so
+     only the displayed size changes here — no game maths depends on it. */
+  var boardWrap = document.querySelector('.board-wrap');
+  var stage = document.querySelector('.stage');
+  var lastSize = -1;
+  function layout(){
+    var w = boardWrap.clientWidth, h = boardWrap.clientHeight;
+    if (!w || !h) return;
+    var size = Math.max(150, Math.min(w, h, 560));
+    if (size === lastSize) return;   /* guards against a ResizeObserver loop */
+    lastSize = size;
+    stage.style.width = size + 'px';
+    stage.style.height = size + 'px';
+  }
+  if (window.ResizeObserver){
+    try { new ResizeObserver(layout).observe(boardWrap); } catch (e) {}
+  }
+  window.addEventListener('resize', layout);
+  /* iOS reports the old viewport for a moment after the device turns */
+  window.addEventListener('orientationchange', function(){ setTimeout(layout, 150); });
 
   /* Holds the last lit frame while the screen collapses. */
   var off = document.createElement('canvas');
@@ -1017,6 +1101,7 @@
 
   /* ---------- boot ---------- */
   function boot(saved){
+    layout();
     newGame();
     connectBoard();
     if (saved && saved.best) S.best = Math.max(S.best, saved.best);
