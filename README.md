@@ -3,7 +3,7 @@
 A single-file arcade Frogger. No build step, no dependencies, no server —
 `index.html` is the whole game.
 
-**Play it:** https://caughtsmart.github.io/frogger/
+**Play it:** https://caughtsmart.github.io/FROGGER/
 
 ## How to play
 
