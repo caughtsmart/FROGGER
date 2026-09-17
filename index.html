@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="A single-file arcade frogger: dodge the traffic, ride the logs, fill all five bays.">
+<title>Hop Hazard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+<style>
+  :root{
+    --night:#0B1020; --deep:#070B17; --panel:#111730; --edge:#28304F;
+    --ink:#EAF2FF; --dim:#8E9AC4; --frog:#6FE36A; --teal:#2FBFA0; --amber:#F2A03D;
+    --red:#F2564B;
+    --arcade:"Press Start 2P", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--deep); color:var(--ink);
+    font-family:var(--arcade); font-size:11px; line-height:1.7;
+    display:flex; justify-content:center;
+    padding-block:18px; padding-left:16px; padding-right:16px;
+    background-image:radial-gradient(120% 70% at 50% 0%, #16204A 0%, #070B17 62%);
+  }
+  .wrap{width:100%; max-width:520px; display:flex; flex-direction:column; gap:12px}
+
+  .masthead{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap}
+  .masthead h1{margin:0; font-size:16px; letter-spacing:.5px; color:var(--frog); text-shadow:0 2px 0 #1C6B22}
+  .masthead .sub{margin:0; font-size:8px; color:var(--dim); letter-spacing:1px}
+
+  .hud{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:var(--panel); border:2px solid var(--edge); border-radius:4px;
+    padding:9px 10px;
+  }
+  .stat{display:flex; flex-direction:column; gap:3px; min-width:52px}
+  .stat .k{font-size:7px; color:var(--dim); letter-spacing:1px}
+  .stat .v{font-size:11px; color:var(--ink); font-variant-numeric:tabular-nums}
+  .stat.lives .v{color:var(--frog); letter-spacing:1px}
+  .icon{
+    font-family:var(--arcade); font-size:12px; line-height:1; margin-left:auto;
+    background:#1A2245; color:var(--ink); border:2px solid var(--edge);
+    border-radius:4px; padding:7px 9px; cursor:pointer;
+  }
+  .icon:hover{border-color:var(--teal)}
+
+  .power{
+    display:block; width:100%; max-width:100%; aspect-ratio:520/80;
+    border:2px solid var(--edge); border-radius:4px; background:#131A33;
+  }
+
+  .stage{position:relative; border:2px solid var(--edge); border-radius:4px; overflow:hidden; background:#0B1020}
+  canvas{display:block; width:100%; max-width:100%; aspect-ratio:1/1; touch-action:none}
+
+  .overlay{
+    position:absolute; inset:0; display:grid; place-items:center;
+    background:rgba(7,11,23,.86); padding:16px; text-align:center;
+  }
+  .overlay .panel{max-width:340px; display:flex; flex-direction:column; gap:14px; align-items:center}
+  .overlay h2{margin:0; font-size:15px; color:var(--frog); text-shadow:0 2px 0 #1C6B22}
+  .overlay p{margin:0; font-size:8.5px; color:var(--dim); line-height:2}
+  .btn{
+    font-family:var(--arcade); font-size:10px; color:#06210B; background:var(--frog);
+    border:0; border-bottom:4px solid #2E8A36; border-radius:4px;
+    padding:11px 18px; cursor:pointer;
+  }
+  .btn:active{transform:translateY(2px); border-bottom-width:2px}
+  .btn:focus-visible, .icon:focus-visible, .pad button:focus-visible{outline:3px solid var(--teal); outline-offset:2px}
+
+  .pad{display:flex; flex-direction:column; align-items:center; gap:6px}
+  .pad .row{display:flex; gap:6px}
+  .pad button{
+    font-family:var(--arcade); font-size:13px; width:60px; height:46px;
+    background:#1A2245; color:var(--ink); border:2px solid var(--edge);
+    border-radius:4px; cursor:pointer; touch-action:manipulation;
+  }
+  .pad button:active{background:#243063; border-color:var(--teal)}
+
+  .hint{margin:0; font-size:7.5px; color:var(--dim); text-align:center; line-height:2.2}
+
+  .entry{display:flex; flex-direction:column; gap:9px; align-items:center}
+  .entry label{font-size:8px; color:var(--dim); letter-spacing:1px}
+  .entry-row{display:flex; gap:8px; align-items:stretch}
+  .initials{
+    font-family:var(--arcade); font-size:16px; letter-spacing:6px; text-align:center;
+    width:112px; padding:10px 0 10px 6px; text-transform:uppercase;
+    background:#08101F; color:var(--frog); border:2px solid var(--teal); border-radius:4px;
+  }
+  .initials:focus-visible{outline:3px solid var(--teal); outline-offset:2px}
+
+  .scores{
+    background:var(--panel); border:2px solid var(--edge); border-radius:4px; padding:11px 12px 13px;
+    display:flex; flex-direction:column; gap:9px;
+  }
+  .scores-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap}
+  .scores-head h2{margin:0; font-size:10px; color:var(--teal); letter-spacing:1px}
+  .where{font-size:7px; color:var(--dim); letter-spacing:.5px}
+  .score-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px}
+  .score-list li{
+    display:grid; grid-template-columns:20px 1fr auto 44px; gap:8px; align-items:baseline;
+    padding:5px 6px; border-radius:3px; font-size:9px;
+  }
+  .score-list li:nth-child(odd){background:#161D3D}
+  .score-list li.you{background:#1B3A2B; box-shadow:inset 0 0 0 1px var(--frog)}
+  .score-list .rk{color:var(--dim); font-size:8px}
+  .score-list .nm{color:var(--frog); letter-spacing:2px}
+  .score-list .sc{color:var(--ink); font-variant-numeric:tabular-nums}
+  .score-list .lv{color:var(--dim); font-size:7.5px; text-align:right}
+  .empty{margin:0; font-size:8px; color:var(--dim); line-height:2}
+  [hidden]{display:none!important}
+  @media (prefers-reduced-motion: reduce){ .btn:active{transform:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <h1>Hop Hazard</h1>
+    <p class="sub">5 lanes &middot; 5 currents &middot; 5 bays</p>
+  </div>
+
+  <div class="hud">
+    <div class="stat"><span class="k">SCORE</span><span class="v" id="score">0</span></div>
+    <div class="stat"><span class="k">BEST</span><span class="v" id="best">0</span></div>
+    <div class="stat"><span class="k">LEVEL</span><span class="v" id="level">1</span></div>
+    <div class="stat"><span class="k">SPEED</span><span class="v" id="speed">x1.00</span></div>
+    <div class="stat lives"><span class="k">FROGS</span><span class="v" id="lives">&#128056;&#128056;</span></div>
+    <button class="icon" id="mute" title="Sound on/off" aria-label="Sound on/off">&#128266;</button>
+  </div>
+
+  <canvas class="power" id="power"
+          aria-label="Power timer: a hand reaches for the plug as your time runs out"></canvas>
+
+  <div class="stage">
+    <canvas id="game" aria-label="Frogger game board"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <h2 id="ovTitle">Hop Hazard</h2>
+        <p id="ovText">Dodge the traffic, ride the logs and turtles, and park a frog in all five bays before the hand reaches the plug. Some turtles dive — they fade before they go under.</p>
+        <div class="entry" id="ovEntry" hidden>
+          <label for="initials">Enter your initials</label>
+          <div class="entry-row">
+            <input id="initials" class="initials" maxlength="3" autocomplete="off"
+                   spellcheck="false" aria-label="Your initials, up to three letters">
+            <button class="btn" id="saveScore">Save</button>
+          </div>
+        </div>
+        <button class="btn" id="ovBtn">Start</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pad">
+    <button data-dir="up" aria-label="Hop up">&#9650;</button>
+    <div class="row">
+      <button data-dir="left" aria-label="Hop left">&#9664;</button>
+      <button data-dir="down" aria-label="Hop down">&#9660;</button>
+      <button data-dir="right" aria-label="Hop right">&#9654;</button>
+    </div>
+  </div>
+
+  <p class="hint">Arrow keys or WASD &middot; swipe the board &middot; P to pause</p>
+
+  <section class="scores" aria-labelledby="scoresTitle">
+    <div class="scores-head">
+      <h2 id="scoresTitle">High Scores</h2>
+      <span class="where" id="scoresWhere">saved in this browser</span>
+    </div>
+    <ol class="score-list" id="scoreList"></ol>
+    <p class="empty" id="scoresEmpty">No scores yet. Finish a game to claim the top slot.</p>
+  </section>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ---------- board geometry ---------- */
+  var COLS = 13, CELL = 40, W = COLS * CELL, ROWS = 13, H = ROWS * CELL;
+  var ROW_HOME = 0, ROW_MED = 6, ROW_START = 12;
+  var BAY_COLS = [0, 3, 6, 9, 12];
+
+  var cvs = document.getElementById('game');
+  var ctx = cvs.getContext('2d');
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cvs.width = W * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr);
+
+  /* Holds the last lit frame while the screen collapses. */
+  var off = document.createElement('canvas');
+  off.width = W * dpr; off.height = H * dpr;
+  var offCtx = off.getContext('2d');
+  offCtx.scale(dpr, dpr);
+
+  /* The power timer draws into its own strip above the board. */
+  var PW = 520, PH = 80;
+  var pcv = document.getElementById('power');
+  var pctx = pcv.getContext('2d');
+  pcv.width = PW * dpr; pcv.height = PH * dpr;
+  pctx.scale(dpr, dpr);
+
+  var C = {
+    night:'#0B1020', road:'#161C31', line:'#3E4A71', water:'#123A52', wave:'#1B5674',
+    grass:'#1E4D35', grassLit:'#27603F', hedge:'#153826',
+    bay:'#08101F', bayEdge:'#2FBFA0',
+    frog:'#6FE36A', frogDark:'#3B9C45', frogBelly:'#A6F3A0',
+    log:'#8A5A3B', logDark:'#63402A', turtle:'#3FA88A', turtleDark:'#27735E',
+    ink:'#EAF2FF', dim:'#8E9AC4', amber:'#F2A03D', red:'#F2564B',
+    blue:'#5AA9F2', violet:'#B07CF2',
+    /* the power-timer scene */
+    wallPanel:'#131A33', skirting:'#0C1122', plate:'#D8DCE8', plateEdge:'#A5ACC2',
+    slot:'#2B3350', plug:'#1F2744', plugLit:'#3A4670', pin:'#C9CEDC',
+    cable:'#39447A', skin:'#E8B48C', skinDark:'#C08055', sleeve:'#3A4473',
+    spark:'#FFE066'
+  };
+
+  /* ---------- lanes ---------- */
+  var DEFS = [
+    { row:1,  kind:'turtle', dir:-1, speed:56,  len:3, count:3, gap:140, divers:[1] },
+    { row:2,  kind:'log',    dir: 1, speed:44,  len:4, count:3, gap:120 },
+    { row:3,  kind:'log',    dir: 1, speed:92,  len:3, count:3, gap:140 },
+    { row:4,  kind:'turtle', dir:-1, speed:70,  len:2, count:4, gap:100, divers:[0,2] },
+    { row:5,  kind:'log',    dir: 1, speed:52,  len:5, count:3, gap:120 },
+    { row:7,  kind:'truck',  dir:-1, speed:118, len:2, count:2, gap:260, color:C.violet },
+    { row:8,  kind:'car',    dir: 1, speed:78,  len:1, count:3, gap:150, color:C.blue },
+    { row:9,  kind:'car',    dir:-1, speed:104, len:1, count:2, gap:220, color:C.amber },
+    { row:10, kind:'truck',  dir: 1, speed:58,  len:2, count:2, gap:240, color:C.red },
+    { row:11, kind:'car',    dir:-1, speed:66,  len:1, count:3, gap:170, color:C.amber }
+  ];
+  var lanes = [];
+  function buildLanes(){
+    lanes = DEFS.map(function(d){
+      var w = d.len * CELL;
+      var track = W + w + d.gap;
+      var objs = [];
+      for (var i = 0; i < d.count; i++){
+        objs.push({ p: (i * track) / d.count,
+                    dive: !!d.divers && d.divers.indexOf(i) !== -1,
+                    ph: i / d.count });
+      }
+      return { row:d.row, kind:d.kind, dir:d.dir, speed:d.speed, color:d.color,
+               len:d.len, w:w, track:track, objs:objs };
+    });
+  }
+  function laneAt(row){
+    for (var i = 0; i < lanes.length; i++) if (lanes[i].row === row) return lanes[i];
+    return null;
+  }
+  function objX(lane, o){ return lane.dir > 0 ? o.p - lane.w : W - o.p; }
+  function isRiver(row){ return row >= 1 && row <= 5; }
+
+  /* Diving turtles. A group's surface level: 1 is fully up, anything above 0 is
+     still solid ground, and 0 is submerged — step there and you drown. The
+     sink and rise ramps are the player's warning, so they stay walkable. */
+  var DIVE_PERIOD = 6.5;
+  function surfaceOf(o){
+    if (!o.dive) return 1;
+    var ph = ((S.clock / (DIVE_PERIOD / diveRate())) + o.ph) % 1;
+    if (ph < 0.55) return 1;
+    if (ph < 0.74) return 1 - ((ph - 0.55) / 0.19) * 0.65;
+    if (ph < 0.90) return 0;
+    return 0.35 + ((ph - 0.90) / 0.10) * 0.65;
+  }
+
+  /* ---------- game state ---------- */
+  var TIME_MAX = 32;
+  var S = null;
+  function newGame(){
+    buildLanes();
+    S = {
+      state:'ready', score:0, level:1, lives:3, time:TIME_MAX, clock:0, unplug:0,
+      bays:[false,false,false,false,false],
+      frog:{ x:6 * CELL, row:ROW_START, face:0 },
+      best:0, deadTimer:0, flash:0, flashText:''
+    };
+    S.best = loadBest();
+    resetFrog();
+  }
+  function resetFrog(){
+    S.frog.x = 6 * CELL; S.frog.row = ROW_START; S.frog.face = 0;
+    S.furthest = ROW_START; S.time = TIME_MAX; S.deadTimer = 0;
+    S.unplug = 0;   /* plug goes back in */
+  }
+  /* Every lane scales with the level. The cap lands at level 10 — past that
+     the board is already at triple speed and further steps stop being fair. */
+  var SPEED_STEP = 0.22, SPEED_CAP = 3;
+  function speedMult(){ return Math.min(SPEED_CAP, 1 + (S.level - 1) * SPEED_STEP); }
+  /* Turtles surface for shorter stretches as the level climbs. */
+  function diveRate(){ return Math.min(1.9, 1 + (S.level - 1) * 0.1); }
+
+  /* ---------- persistence (best score only) ---------- */
+  function loadBest(){
+    try { return parseInt(localStorage.getItem('hophazard.best') || '0', 10) || 0; }
+    catch (e) { return 0; }
+  }
+  function saveBest(v){ try { localStorage.setItem('hophazard.best', String(v)); } catch (e) {} }
+
+  /* ---------- sound ----------
+     Notes are scheduled on the audio clock rather than fired from setTimeout,
+     so a multi-note cue keeps its rhythm even when a frame runs long. */
+  var muted = false, actx = null;
+  function ac(){
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      return actx;
+    } catch (e) { return null; }
+  }
+  /* One note, starting `at` seconds from now. `to` sweeps the pitch across it. */
+  function tone(freq, at, dur, opts){
+    if (muted) return;
+    var a = ac(); if (!a) return;
+    opts = opts || {};
+    try {
+      var t = a.currentTime + at;
+      var o = a.createOscillator(), g = a.createGain();
+      o.type = opts.type || 'square';
+      o.frequency.setValueAtTime(freq, t);
+      if (opts.to) o.frequency.exponentialRampToValueAtTime(opts.to, t + dur);
+      var vol = opts.vol == null ? 0.05 : opts.vol;
+      /* ramp in and out — jumping straight to full gain clicks */
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(a.destination);
+      o.start(t); o.stop(t + dur + 0.02);
+    } catch (e) {}
+  }
+  /* A short burst of decaying noise — the splash under the death cue. */
+  function noise(at, dur, vol){
+    if (muted) return;
+    var a = ac(); if (!a) return;
+    try {
+      var t = a.currentTime + at;
+      var n = Math.max(1, Math.floor(a.sampleRate * dur));
+      var buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+      for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      var src = a.createBufferSource(); src.buffer = buf;
+      var f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1100;
+      var g = a.createGain(); g.gain.value = vol == null ? 0.08 : vol;
+      src.connect(f); f.connect(g); g.connect(a.destination);
+      src.start(t);
+    } catch (e) {}
+  }
+  var sfx = {
+    hop:  function(){ tone(440, 0, 0.07, { to:640, vol:0.035 }); },
+    home: function(){ tone(659.25, 0, 0.09, { vol:0.05 }); tone(987.77, 0.09, 0.18, { vol:0.05 }); },
+    /* death: a wail sliding down two octaves, with a splash underneath */
+    die:  function(){
+      tone(420, 0, 0.6, { type:'sawtooth', to:70, vol:0.075 });
+      tone(210, 0, 0.6, { type:'square',   to:45, vol:0.035 });
+      noise(0.04, 0.4, 0.075);
+    },
+    /* the plug coming out: a yank, a spark, and the power dying */
+    unplug: function(){
+      tone(880, 0, 0.1, { type:'square', to:200, vol:0.05 });
+      noise(0.07, 0.2, 0.07);
+      tone(170, 0.1, 0.55, { type:'sawtooth', to:40, vol:0.07 });
+    },
+    /* level clear: a rising run into a held major chord */
+    level:function(){
+      var run = [523.25, 659.25, 783.99, 1046.50];
+      run.forEach(function(f, i){ tone(f, i * 0.11, 0.15, { vol:0.055 }); });
+      var at = run.length * 0.11;
+      [523.25, 659.25, 783.99, 1318.51].forEach(function(f){
+        tone(f, at, 0.7, { type:'triangle', vol:0.045 });
+      });
+    }
+  };
+
+  /* ---------- input ---------- */
+  /* True while the initials box is open: the board must ignore keys and taps
+     so typing "SAD" doesn't hop the frog or restart the game. */
+  var entering = false;
+
+  function hop(dx, dy){
+    if (!S || S.state !== 'playing' || S.deadTimer > 0) return;
+    var f = S.frog;
+    var nrow = Math.max(0, Math.min(ROW_START, f.row + dy));
+    var ncol = Math.round(f.x / CELL) + dx;
+    ncol = Math.max(0, Math.min(COLS - 1, ncol));
+    if (nrow === f.row && ncol * CELL === f.x) return;
+    f.row = nrow; f.x = ncol * CELL;
+    f.face = dy < 0 ? 0 : dy > 0 ? 2 : dx < 0 ? 3 : 1;
+    sfx.hop();
+    if (f.row < S.furthest){ S.score += 10; S.furthest = f.row; }
+    if (f.row === ROW_HOME) tryHome();
+  }
+  function tryHome(){
+    var col = Math.round(S.frog.x / CELL);
+    var slot = BAY_COLS.indexOf(col);
+    if (slot === -1 || S.bays[slot]) { die(); return; }
+    S.bays[slot] = true;
+    S.score += 50 + Math.floor(S.time) * 5;
+    sfx.home();
+    S.flash = 1.1; S.flashText = 'BAY ' + (slot + 1) + ' SAFE';
+    if (S.bays.every(Boolean)) levelUp(); else resetFrog();
+  }
+  function levelUp(){
+    S.score += 1000; S.level += 1; S.lives = Math.min(5, S.lives + 1);
+    S.bays = [false,false,false,false,false];
+    S.clock = 0;
+    buildLanes(); resetFrog();
+    S.flash = 1.6; S.flashText = 'LEVEL ' + S.level + '  x' + speedMult().toFixed(2);
+    sfx.level();
+  }
+  function die(cause){
+    if (S.deadTimer > 0) return;
+    /* a power cut earns a longer beat: the yank, then the plug lying out */
+    S.deadTimer = cause === 'power' ? 1.8 : 0.9;
+    S.lives -= 1;
+    if (cause === 'power') sfx.unplug(); else sfx.die();
+    if (S.score > S.best){ S.best = S.score; saveBest(S.best); }
+  }
+  function gameOver(){
+    S.state = 'over';
+    if (S.score > S.best){ S.best = S.score; saveBest(S.best); }
+    if (qualifies(S.score)){ askInitials(); return; }
+    showOverlay('Game Over', 'You scored ' + S.score.toLocaleString() +
+      '. Best so far: ' + bestScore().toLocaleString() + '.', 'Play again');
+  }
+
+  var KEYS = {
+    ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0],
+    w:[0,-1], s:[0,1], a:[-1,0], d:[1,0], W:[0,-1], S:[0,1], A:[-1,0], D:[1,0]
+  };
+  window.addEventListener('keydown', function(e){
+    if (entering) return;
+    if (e.key === 'p' || e.key === 'P'){ togglePause(); return; }
+    var k = KEYS[e.key];
+    if (!k) return;
+    e.preventDefault();
+    if (S.state === 'ready' || S.state === 'over') { start(); return; }
+    hop(k[0], k[1]);
+  }, { passive:false });
+
+  document.querySelectorAll('.pad button').forEach(function(b){
+    b.addEventListener('click', function(){
+      if (entering) return;
+      if (S.state === 'ready' || S.state === 'over') { start(); return; }
+      var d = b.getAttribute('data-dir');
+      hop(d === 'left' ? -1 : d === 'right' ? 1 : 0, d === 'up' ? -1 : d === 'down' ? 1 : 0);
+    });
+  });
+
+  var tStart = null;
+  cvs.addEventListener('pointerdown', function(e){ tStart = { x:e.clientX, y:e.clientY }; });
+  cvs.addEventListener('pointerup', function(e){
+    if (!tStart) return;
+    var dx = e.clientX - tStart.x, dy = e.clientY - tStart.y;
+    tStart = null;
+    if (entering) return;
+    if (S.state === 'ready' || S.state === 'over'){ start(); return; }
+    if (Math.abs(dx) < 18 && Math.abs(dy) < 18){ hop(0, -1); return; }
+    if (Math.abs(dx) > Math.abs(dy)) hop(dx > 0 ? 1 : -1, 0); else hop(0, dy > 0 ? 1 : -1);
+  });
+
+  var muteBtn = document.getElementById('mute');
+  muteBtn.addEventListener('click', function(){
+    muted = !muted;
+    muteBtn.innerHTML = muted ? '&#128263;' : '&#128266;';
+  });
+
+  /* ---------- overlay ---------- */
+  var ov = document.getElementById('overlay');
+  var ovTitle = document.getElementById('ovTitle');
+  var ovText = document.getElementById('ovText');
+  var ovBtn = document.getElementById('ovBtn');
+  function showOverlay(title, text, btn){
+    ovTitle.textContent = title; ovText.textContent = text; ovBtn.textContent = btn;
+    if (ovEntry) ovEntry.hidden = true;
+    ovBtn.hidden = false;
+    ov.hidden = false;
+  }
+  ovBtn.addEventListener('click', function(){
+    if (S.state === 'paused'){ S.state = 'playing'; ov.hidden = true; return; }
+    start();
+  });
+  function start(){
+    if (S.state === 'over' || S.state === 'ready'){
+      var best = S.best;
+      newGame(); S.best = best;
+    }
+    S.state = 'playing'; ov.hidden = true;
+    Board.mine = -1; renderBoard();
+  }
+  function togglePause(){
+    if (S.state === 'playing'){
+      S.state = 'paused';
+      showOverlay('Paused', 'The traffic is holding its breath.', 'Resume');
+    } else if (S.state === 'paused'){
+      S.state = 'playing'; ov.hidden = true;
+    }
+  }
+  window.addEventListener('blur', function(){ if (S && S.state === 'playing') togglePause(); });
+
+  /* ---------- update ---------- */
+  function update(dt){
+    var m = S.state === 'playing' ? speedMult() : 1;
+    if (S.state !== 'playing' && S.state !== 'ready') m = 0;
+    if (m > 0) S.clock += dt;
+    for (var i = 0; i < lanes.length; i++){
+      var L = lanes[i];
+      for (var j = 0; j < L.objs.length; j++){
+        var o = L.objs[j];
+        o.p = (o.p + L.speed * m * dt) % L.track;
+      }
+    }
+    if (S.flash > 0) S.flash -= dt;
+    /* the yank keeps animating through the death freeze */
+    if (S.unplug > 0 && S.unplug < 1) S.unplug = Math.min(1, S.unplug + dt / 0.5);
+    if (S.state !== 'playing') return;
+
+    if (S.deadTimer > 0){
+      S.deadTimer -= dt;
+      if (S.deadTimer <= 0){
+        if (S.lives <= 0) gameOver(); else resetFrog();
+      }
+      return;
+    }
+
+    S.time -= dt;
+    if (S.time <= 0){
+      S.time = 0;
+      if (!S.unplug) S.unplug = 0.001;    /* the hand yanks it out */
+      die('power');
+      return;
+    }
+
+    var f = S.frog, row = f.row;
+
+    if (isRiver(row)){
+      var L2 = laneAt(row), rider = null;
+      var cx = f.x + CELL / 2;
+      for (var k = 0; k < L2.objs.length; k++){
+        var ox = objX(L2, L2.objs[k]);
+        if (cx >= ox && cx <= ox + L2.w && surfaceOf(L2.objs[k]) > 0){ rider = L2.objs[k]; break; }
+      }
+      if (!rider){ die(); return; }
+      f.x += L2.dir * L2.speed * speedMult() * dt;
+      if (f.x < -4 || f.x > W - CELL + 4){ die(); return; }
+    } else if (row >= 7 && row <= 11){
+      var L3 = laneAt(row);
+      var fl = f.x + 5, fr = f.x + CELL - 5;
+      for (var n = 0; n < L3.objs.length; n++){
+        var x = objX(L3, L3.objs[n]);
+        if (fr > x + 3 && fl < x + L3.w - 3){ die(); return; }
+      }
+    }
+  }
+
+  /* ---------- draw ---------- */
+  function rrOn(c, x, y, w, h, r){
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+  function rr(x, y, w, h, r){ rrOn(ctx, x, y, w, h, r); }
+
+  function drawBoard(){
+    ctx.fillStyle = C.water; ctx.fillRect(0, CELL, W, 5 * CELL);
+    ctx.strokeStyle = C.wave; ctx.lineWidth = 1;
+    for (var y = CELL + 8; y < 6 * CELL; y += 11){
+      ctx.beginPath();
+      for (var x = 0; x <= W; x += 8) ctx.lineTo(x, y + Math.sin((x + y) * 0.06) * 1.6);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = C.hedge; ctx.fillRect(0, 0, W, CELL);
+    BAY_COLS.forEach(function(c, i){
+      var x = c * CELL + 3, y = 5, w = CELL - 6, h = CELL - 10;
+      ctx.fillStyle = C.bay; rr(x, y, w, h, 4); ctx.fill();
+      ctx.strokeStyle = C.bayEdge; ctx.lineWidth = 2; rr(x, y, w, h, 4); ctx.stroke();
+      if (S.bays[i]) drawFrogShape(x + 4, y + 4, w - 8, h - 8, 0, true);
+    });
+
+    ctx.fillStyle = C.grass; ctx.fillRect(0, ROW_MED * CELL, W, CELL);
+    ctx.fillStyle = C.grassLit; ctx.fillRect(0, ROW_MED * CELL, W, 3);
+    ctx.fillStyle = C.grass; ctx.fillRect(0, ROW_START * CELL, W, CELL);
+    ctx.fillStyle = C.grassLit; ctx.fillRect(0, ROW_START * CELL, W, 3);
+
+    ctx.fillStyle = C.road; ctx.fillRect(0, 7 * CELL, W, 5 * CELL);
+    ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.setLineDash([10, 12]);
+    for (var r = 8; r <= 11; r++){
+      ctx.beginPath(); ctx.moveTo(0, r * CELL); ctx.lineTo(W, r * CELL); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  function drawLanes(){
+    lanes.forEach(function(L){
+      var y = L.row * CELL;
+      L.objs.forEach(function(o){
+        var x = objX(L, o);
+        for (var pass = -1; pass <= 1; pass++) drawObj(L, o, x + pass * L.track, y);
+      });
+    });
+  }
+
+  function drawObj(L, o, x, y){
+    if (x > W + 4 || x + L.w < -4) return;
+    if (L.kind === 'log'){
+      ctx.fillStyle = C.log; rr(x, y + 7, L.w, CELL - 14, 7); ctx.fill();
+      ctx.strokeStyle = C.logDark; ctx.lineWidth = 2;
+      for (var g = 1; g < L.len; g++){
+        ctx.beginPath(); ctx.moveTo(x + g * CELL, y + 10); ctx.lineTo(x + g * CELL, y + CELL - 10); ctx.stroke();
+      }
+      ctx.strokeStyle = C.logDark; rr(x, y + 7, L.w, CELL - 14, 7); ctx.stroke();
+    } else if (L.kind === 'turtle'){
+      var s = surfaceOf(o);
+      for (var t = 0; t < L.len; t++){
+        var cx = x + t * CELL + CELL / 2, cy = y + CELL / 2;
+        ctx.save();
+        if (s <= 0){
+          /* submerged: leave a ripple so the group can still be tracked */
+          ctx.globalAlpha = 0.3; ctx.strokeStyle = C.turtleDark; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2); ctx.stroke();
+        } else {
+          var r = (CELL / 2 - 5) * (0.72 + 0.28 * s);
+          ctx.globalAlpha = s;
+          ctx.fillStyle = C.turtle;
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = C.turtleDark; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(cx, cy, r * 0.73, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(cx, cy, r * 0.47, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.restore();
+      }
+    } else {
+      var pad = L.kind === 'truck' ? 5 : 6;
+      ctx.fillStyle = L.color;
+      rr(x + 2, y + pad, L.w - 4, CELL - pad * 2, 5); ctx.fill();
+      ctx.fillStyle = 'rgba(8,16,31,.55)';
+      var wx = L.dir > 0 ? x + L.w - 16 : x + 6;
+      rr(wx, y + pad + 4, 10, CELL - pad * 2 - 8, 3); ctx.fill();
+      ctx.fillStyle = '#FFF3C4';
+      var hx = L.dir > 0 ? x + L.w - 6 : x + 2;
+      ctx.fillRect(hx, y + CELL / 2 - 3, 4, 6);
+    }
+  }
+
+  function drawFrogShape(x, y, w, h, face, small){
+    ctx.save();
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate(face * Math.PI / 2);
+    ctx.fillStyle = C.frogDark;
+    rr(-w / 2, -h / 2 + 2, w, h - 4, 6); ctx.fill();
+    ctx.fillStyle = C.frog;
+    rr(-w / 2 + 3, -h / 2 + 4, w - 6, h - 10, 5); ctx.fill();
+    ctx.fillStyle = C.frogBelly;
+    rr(-w / 4, -h / 6, w / 2, h / 3, 3); ctx.fill();
+    if (!small){
+      ctx.fillStyle = C.frog;
+      ctx.beginPath(); ctx.arc(-w / 4, -h / 2 + 3, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(w / 4, -h / 2 + 3, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#08101F';
+      ctx.beginPath(); ctx.arc(-w / 4, -h / 2 + 3, 1.7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(w / 4, -h / 2 + 3, 1.7, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawFrog(){
+    var f = S.frog, y = f.row * CELL;
+    if (S.deadTimer > 0){
+      var t = 1 - S.deadTimer / 0.9;
+      ctx.strokeStyle = C.red; ctx.lineWidth = 4;
+      var s = 6 + t * 10, cx = f.x + CELL / 2, cy = y + CELL / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx + s, cy + s);
+      ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx - s, cy + s);
+      ctx.stroke();
+      return;
+    }
+    drawFrogShape(f.x + 3, y + 3, CELL - 6, CELL - 6, f.face, false);
+  }
+
+  function drawFlash(){
+    if (S.flash <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, S.flash);
+    ctx.fillStyle = C.ink;
+    ctx.font = '16px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#08101F'; ctx.lineWidth = 5;
+    ctx.strokeText(S.flashText, W / 2, H / 2);
+    ctx.fillText(S.flashText, W / 2, H / 2);
+    ctx.restore();
+  }
+
+  /* How far the screen has collapsed: nothing until the pins break contact,
+     fully dark a fraction of a second later. */
+  function crtLevel(){
+    if (!S || !S.unplug) return 0;
+    return Math.max(0, Math.min(1, (S.unplug - 0.3) / 0.45));
+  }
+
+  /* A CRT losing power: the picture squashes to a bright horizontal line,
+     the line pinches to a dot, the dot fades. */
+  function drawCrtOff(k){
+    var squash = Math.min(1, k / 0.55);
+    var pinch  = Math.max(0, Math.min(1, (k - 0.55) / 0.3));
+    var fade   = Math.max(0, Math.min(1, (k - 0.85) / 0.15));
+
+    ctx.fillStyle = '#05070E';
+    ctx.fillRect(0, 0, W, H);
+    if (fade >= 1) return;
+
+    var h = H * (1 - squash) + 3 * squash;
+    var w = W * (1 - pinch) + 5 * pinch;
+    var x = (W - w) / 2, y = (H - h) / 2;
+
+    ctx.save();
+    ctx.globalAlpha = 1 - fade;
+    ctx.drawImage(off, x, y, w, h);
+    /* the hot scan line the tube leaves behind as it dies */
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = (1 - fade) * squash * 0.85;
+    ctx.fillStyle = '#DCEEFF';
+    var bh = Math.max(2.5, h * 0.45);
+    ctx.fillRect(x, (H - bh) / 2, w, bh);
+    ctx.restore();
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    drawBoard();
+    drawLanes();
+    drawFrog();
+    drawFlash();
+
+    var k = crtLevel();
+    if (k <= 0) return;
+    if (k < 1){                       /* keep the last lit frame to collapse */
+      offCtx.clearRect(0, 0, W, H);
+      offCtx.drawImage(cvs, 0, 0, W, H);
+    }
+    drawCrtOff(k);
+  }
+
+  /* ---------- the power timer ----------
+     The clock is a hand creeping toward the plug. Full time parks it off the
+     right edge; zero brings it to the socket, where it yanks the plug out. */
+  var SOCKET_X = 10, PLUG_X = 62, HAND_FAR = 566, HAND_GRIP = 128;
+
+  function drawHand(c, x, grip){
+    /* sleeve and forearm run off the right edge */
+    c.fillStyle = C.sleeve;
+    rrOn(c, x + 30, 20, PW - x, 30, 6); c.fill();
+    /* palm */
+    c.fillStyle = C.skin;
+    rrOn(c, x + 2, 18, 34, 34, 9); c.fill();
+    c.strokeStyle = C.skinDark; c.lineWidth = 1.5;
+    rrOn(c, x + 2, 18, 34, 34, 9); c.stroke();
+    /* fingers reach out, then curl as the hand closes on the plug */
+    var reach = 15 - grip * 8;
+    for (var i = 0; i < 4; i++){
+      var fy = 21 + i * 8;
+      c.fillStyle = C.skin;
+      rrOn(c, x + 2 - reach, fy, reach + 6, 6.5, 3); c.fill();
+      c.strokeStyle = C.skinDark; c.lineWidth = 1;
+      rrOn(c, x + 2 - reach, fy, reach + 6, 6.5, 3); c.stroke();
+    }
+    /* thumb underneath */
+    c.fillStyle = C.skin;
+    rrOn(c, x + 8, 47, 18, 8, 4); c.fill();
+    c.strokeStyle = C.skinDark; c.lineWidth = 1;
+    rrOn(c, x + 8, 47, 18, 8, 4); c.stroke();
+  }
+
+  function drawPower(){
+    var frac = S ? Math.max(0, Math.min(1, S.time / TIME_MAX)) : 1;
+    var u = S ? (S.unplug || 0) : 0;
+    var ease = u * u * (3 - 2 * u);          /* smoothstep the yank */
+    var pull = ease * 84;
+
+    pctx.clearRect(0, 0, PW, PH);
+    pctx.fillStyle = C.wallPanel; pctx.fillRect(0, 0, PW, PH);
+    pctx.fillStyle = C.skirting;  pctx.fillRect(0, PH - 16, PW, 16);
+
+    /* socket plate */
+    pctx.fillStyle = C.plate;
+    rrOn(pctx, SOCKET_X, 8, 66, 48, 7); pctx.fill();
+    pctx.strokeStyle = C.plateEdge; pctx.lineWidth = 2;
+    rrOn(pctx, SOCKET_X, 8, 66, 48, 7); pctx.stroke();
+    pctx.fillStyle = C.plateEdge;
+    [[SOCKET_X + 33, 14], [SOCKET_X + 33, 50]].forEach(function(pt){
+      pctx.beginPath(); pctx.arc(pt[0], pt[1], 2.2, 0, Math.PI * 2); pctx.fill();
+    });
+    /* the three slots, revealed as the plug leaves */
+    if (pull > 8){
+      pctx.fillStyle = C.slot;
+      rrOn(pctx, SOCKET_X + 29, 19, 7, 13, 2); pctx.fill();
+      rrOn(pctx, SOCKET_X + 15, 36, 14, 7, 2); pctx.fill();
+      rrOn(pctx, SOCKET_X + 37, 36, 14, 7, 2); pctx.fill();
+    }
+
+    var plugX = PLUG_X + pull;
+
+    /* cable: from the plug off to the right, sagging more once it is loose */
+    pctx.beginPath();
+    pctx.moveTo(plugX + 56, 33);
+    pctx.quadraticCurveTo(plugX + 170, 52 + ease * 14, PW, 46 + ease * 8);
+    pctx.strokeStyle = C.cable; pctx.lineWidth = 6; pctx.lineCap = 'round';
+    pctx.stroke();
+
+    /* plug body */
+    pctx.fillStyle = C.plug;
+    rrOn(pctx, plugX, 14, 56, 38, 7); pctx.fill();
+    pctx.fillStyle = C.plugLit;
+    rrOn(pctx, plugX + 6, 19, 44, 12, 4); pctx.fill();
+    /* pins, only once they clear the socket */
+    if (pull > 10){
+      pctx.fillStyle = C.pin;
+      rrOn(pctx, plugX - 13, 21, 19, 6, 2); pctx.fill();
+      rrOn(pctx, plugX - 13, 38, 19, 6, 2); pctx.fill();
+      rrOn(pctx, plugX - 17, 29, 23, 6, 2); pctx.fill();
+    }
+
+    /* the hand: distance to the plug IS the remaining time */
+    var grip = 1 - Math.min(1, frac / 0.18);      /* closes over the last ~18% */
+    var handX = HAND_GRIP + (HAND_FAR - HAND_GRIP) * frac + pull;
+    drawHand(pctx, handX, Math.max(0, grip));
+
+    /* spark as the pins break contact */
+    if (u > 0 && u < 0.55){
+      var sp = 1 - u / 0.55;
+      pctx.save();
+      pctx.globalAlpha = sp;
+      pctx.strokeStyle = C.spark; pctx.lineWidth = 2.5; pctx.lineCap = 'round';
+      for (var k = 0; k < 5; k++){
+        var a = (k / 5) * Math.PI * 2 + u * 6, r1 = 5, r2 = 9 + sp * 9;
+        pctx.beginPath();
+        pctx.moveTo(plugX - 12 + Math.cos(a) * r1, 33 + Math.sin(a) * r1);
+        pctx.lineTo(plugX - 12 + Math.cos(a) * r2, 33 + Math.sin(a) * r2);
+        pctx.stroke();
+      }
+      pctx.restore();
+    }
+
+    /* seconds left, on the skirting where the arm never covers it */
+    var secs = Math.ceil(S ? Math.max(0, S.time) : TIME_MAX);
+    pctx.font = '11px "Press Start 2P", monospace';
+    pctx.textAlign = 'left';
+    pctx.fillStyle = frac < 0.25 ? C.red : C.dim;
+    pctx.fillText(u >= 1 ? 'POWER CUT' : secs + 's', SOCKET_X + 2, PH - 4);
+  }
+
+  /* ---------- high score table ----------
+     Backed by the artifact `db` capability when the page is served with it,
+     so the table persists and is shared between viewers. Anywhere else — the
+     standalone file, a view without the grant — it falls back to this
+     browser's localStorage. Same shape either way. */
+  var TOP_N = 10, LS_SCORES = 'hophazard.scores';
+  var Board = { rows: [], ref: null, shared: false, mine: -1 };
+
+  /* Rows can come from shared storage, so treat every field as untrusted. */
+  function cleanName(v){
+    return String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || '---';
+  }
+  function cleanNum(v){ var n = Number(v); return isFinite(n) && n > 0 ? Math.floor(n) : 0; }
+  function cleanRows(list){
+    if (!Array.isArray(list)) return [];
+    return list.slice(0, 200).map(function(r){
+      r = r && typeof r === 'object' ? r : {};
+      return { name: cleanName(r.name), score: cleanNum(r.score), level: cleanNum(r.level) || 1 };
+    }).sort(function(a, b){ return b.score - a.score; }).slice(0, TOP_N);
+  }
+  function loadLocalRows(){
+    try { return cleanRows(JSON.parse(localStorage.getItem(LS_SCORES) || '[]')); }
+    catch (e) { return []; }
+  }
+  function saveLocalRows(rows){
+    try { localStorage.setItem(LS_SCORES, JSON.stringify(rows)); } catch (e) {}
+  }
+  function indexOfEntry(rows, entry){
+    for (var i = 0; i < rows.length; i++){
+      if (rows[i].name === entry.name && rows[i].score === entry.score) return i;
+    }
+    return -1;
+  }
+  function boardTop(){ return Board.rows.length ? Board.rows[0].score : 0; }
+  function bestScore(){ return Math.max(S ? S.best : 0, boardTop()); }
+  function qualifies(score){
+    if (score <= 0) return false;
+    if (Board.rows.length < TOP_N) return true;
+    return score > Board.rows[Board.rows.length - 1].score;
+  }
+
+  var elList = document.getElementById('scoreList');
+  var elEmpty = document.getElementById('scoresEmpty');
+  var elWhere = document.getElementById('scoresWhere');
+  function renderBoard(){
+    elList.textContent = '';
+    elEmpty.hidden = Board.rows.length > 0;
+    Board.rows.forEach(function(r, i){
+      var li = document.createElement('li');
+      if (i === Board.mine) li.className = 'you';
+      [['rk', (i + 1) + '.'], ['nm', r.name], ['sc', r.score.toLocaleString()],
+       ['lv', 'LV ' + r.level]].forEach(function(pair){
+        var sp = document.createElement('span');
+        sp.className = pair[0];
+        sp.textContent = pair[1];   /* never innerHTML: these strings are data */
+        li.appendChild(sp);
+      });
+      elList.appendChild(li);
+    });
+  }
+
+  /* Add an entry and keep the top N. On db this is a read-modify-write of one
+     small document; writes are last-writer-wins, so two players finishing at
+     the very same moment can cost one entry. Fine for a leaderboard. */
+  function submitScore(entry){
+    if (Board.ref){
+      return Board.ref.get().then(function(snap){
+        var prev = snap.exists ? snap.data() : null;
+        var rows = cleanRows((prev && prev.entries || []).concat([entry]));
+        Board.mine = indexOfEntry(rows, entry);
+        return Board.ref.set({ entries: rows });
+      })['catch'](function(){
+        /* shared write refused or unavailable — keep the run locally */
+        Board.rows = cleanRows(Board.rows.concat([entry]));
+        Board.mine = indexOfEntry(Board.rows, entry);
+        saveLocalRows(Board.rows); renderBoard();
+      });
+    }
+    Board.rows = cleanRows(Board.rows.concat([entry]));
+    Board.mine = indexOfEntry(Board.rows, entry);
+    saveLocalRows(Board.rows); renderBoard();
+    return Promise.resolve();
+  }
+
+  function connectBoard(){
+    Board.rows = loadLocalRows();
+    renderBoard();
+    if (!window.claude || typeof window.claude.use !== 'function') return;
+    Promise.resolve(window.claude.use('db')).then(function(db){
+      if (!db) return;                       /* not served or not granted */
+      Board.ref = db.doc('scores/top');
+      Board.shared = true;
+      elWhere.textContent = 'shared leaderboard';
+      Board.ref.onSnapshot(function(snap){
+        var d = snap.exists ? snap.data() : null;
+        Board.rows = cleanRows(d && d.entries);
+        renderBoard();
+      }, function(){
+        /* subscription died — fall back to what this browser has */
+        Board.ref = null; Board.shared = false;
+        elWhere.textContent = 'saved in this browser';
+        Board.rows = loadLocalRows(); renderBoard();
+      });
+    })['catch'](function(){});
+  }
+
+  /* ---------- initials entry ---------- */
+  var ovEntry = document.getElementById('ovEntry');
+  var elInitials = document.getElementById('initials');
+  var btnSave = document.getElementById('saveScore');
+
+  function askInitials(){
+    entering = true;
+    ovTitle.textContent = 'New High Score';
+    ovText.textContent = S.score.toLocaleString() + ' points, level ' + S.level + '.';
+    ovEntry.hidden = false;
+    ovBtn.hidden = true;
+    ov.hidden = false;
+    try { elInitials.value = cleanName(localStorage.getItem('hophazard.initials')) ; } catch (e) {}
+    if (!elInitials.value || elInitials.value === '---') elInitials.value = 'AAA';
+    elInitials.focus(); elInitials.select();
+  }
+  function commitInitials(){
+    if (!entering) return;
+    var name = cleanName(elInitials.value);
+    try { localStorage.setItem('hophazard.initials', name); } catch (e) {}
+    entering = false;
+    ovEntry.hidden = true;
+    ovBtn.hidden = false;
+    submitScore({ name: name, score: S.score, level: S.level });
+    showOverlay('Game Over', 'You scored ' + S.score.toLocaleString() +
+      '. Best so far: ' + Math.max(bestScore(), S.score).toLocaleString() + '.', 'Play again');
+  }
+  btnSave.addEventListener('click', commitInitials);
+  elInitials.addEventListener('keydown', function(e){
+    e.stopPropagation();
+    if (e.key === 'Enter') commitInitials();
+  });
+
+  /* ---------- HUD ---------- */
+  var FROG_ICON = String.fromCharCode(0xD83D, 0xDC38);
+  var elScore = document.getElementById('score'), elBest = document.getElementById('best'),
+      elLevel = document.getElementById('level'), elLives = document.getElementById('lives'),
+      elSpeed = document.getElementById('speed');
+  function syncHud(){
+    elScore.textContent = S.score;
+    elBest.textContent = bestScore();
+    elLevel.textContent = S.level;
+    elSpeed.textContent = 'x' + speedMult().toFixed(2);
+    elLives.textContent = FROG_ICON.repeat(Math.max(0, S.lives));
+  }
+
+  /* ---------- loop ---------- */
+  var last = 0;
+  function frame(ts){
+    var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+    last = ts;
+    update(dt);
+    draw();
+    drawPower();
+    syncHud();
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- boot ---------- */
+  function boot(saved){
+    newGame();
+    connectBoard();
+    if (saved && saved.best) S.best = Math.max(S.best, saved.best);
+    showOverlay('Hop Hazard',
+      'Dodge the traffic, ride the logs and turtles, and park a frog in all five bays before the hand reaches the plug. Some turtles dive — they fade before they go under.',
+      'Start');
+    requestAnimationFrame(frame);
+  }
+  try {
+    if (window.claude && window.claude.hot){
+      window.claude.hot.snapshot(function(){ return { best: S ? S.best : 0 }; });
+      window.claude.hot.ready ? window.claude.hot.ready(boot) : boot(window.claude.hot.data || {});
+    } else { boot({}); }
+  } catch (e) { boot({}); }
+})();
+</script>
+</body>
+</html>
