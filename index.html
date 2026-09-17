@@ -29,6 +29,10 @@
      it, reached by a deliberate scroll. */
   .game-shell{
     height:100%; min-height:380px;
+    /* flex-shrink:0 is load-bearing: as a flex item the shell would otherwise
+       be squashed to make room for the score panel below it, which is exactly
+       the height the board needs. The scores belong below the fold. */
+    flex:0 0 auto;
     display:flex; flex-direction:column; gap:9px;
   }
   /* The board takes whatever height is left over, and sizes itself square to
@@ -60,7 +64,12 @@
     border:2px solid var(--edge); border-radius:4px; background:#131A33;
   }
 
-  .stage{position:relative; border:2px solid var(--edge); border-radius:4px; overflow:hidden; background:#0B1020}
+  /* width/height are overwritten in px by layout(); these keep the board
+     square and visible if that measurement ever fails. */
+  .stage{
+    position:relative; width:100%; max-width:520px; aspect-ratio:1/1;
+    border:2px solid var(--edge); border-radius:4px; overflow:hidden; background:#0B1020;
+  }
   #game{display:block; width:100%; height:100%; touch-action:none}
 
   .overlay{
@@ -253,10 +262,16 @@
      only the displayed size changes here — no game maths depends on it. */
   var boardWrap = document.querySelector('.board-wrap');
   var stage = document.querySelector('.stage');
-  var lastSize = -1;
+  var lastSize = -1, layoutTries = 0;
   function layout(){
     var w = boardWrap.clientWidth, h = boardWrap.clientHeight;
-    if (!w || !h) return;
+    if (!w || !h){
+      /* iOS can report a zero box on first paint — try again next frame
+         rather than leaving the board unsized. */
+      if (layoutTries++ < 30) requestAnimationFrame(layout);
+      return;
+    }
+    layoutTries = 0;
     var size = Math.max(150, Math.min(w, h, 560));
     if (size === lastSize) return;   /* guards against a ResizeObserver loop */
     lastSize = size;
@@ -267,8 +282,11 @@
     try { new ResizeObserver(layout).observe(boardWrap); } catch (e) {}
   }
   window.addEventListener('resize', layout);
+  /* Safari's toolbars grow and shrink the usable height as you scroll */
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', layout);
   /* iOS reports the old viewport for a moment after the device turns */
   window.addEventListener('orientationchange', function(){ setTimeout(layout, 150); });
+  window.addEventListener('load', layout);
 
   /* Holds the last lit frame while the screen collapses. */
   var off = document.createElement('canvas');
